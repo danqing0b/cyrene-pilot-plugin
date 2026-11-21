@@ -1,0 +1,240 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "models": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "tokenFile": {
+            "type": "string",
+            "minLength": 1
+          },
+          "model": {
+            "type": "string",
+            "minLength": 1
+          },
+          "revision": {
+            "type": "string",
+            "minLength": 1
+          },
+          "maxTokens": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8192,
+            "default": 1024
+          },
+          "timeoutSeconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 120,
+            "default": 60
+          },
+          "systemPrompt": {
+            "type": "string",
+            "maxLength": 8192
+          }
+        },
+        "required": [
+          "url",
+          "model",
+          "revision"
+        ]
+      }
+    },
+    "datasets": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          },
+          "catalyst": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "datasetId": {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$"
+              },
+              "revisionId": {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$"
+              },
+              "resourceVersion": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 2147483647
+              }
+            },
+            "required": [
+              "datasetId",
+              "revisionId",
+              "resourceVersion"
+            ]
+          }
+        },
+        "required": [
+          "path",
+          "digest"
+        ]
+      }
+    },
+    "echo": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "tokenFile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "artifactRoot": {
+          "type": "string",
+          "minLength": 1
+        },
+        "suiteId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$"
+        },
+        "engineBindingId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$"
+        }
+      },
+      "required": [
+        "url",
+        "artifactRoot",
+        "suiteId",
+        "engineBindingId"
+      ]
+    },
+    "catalyst": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "tokenFile": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "url"
+      ]
+    },
+    "dataGuard": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "aiModelId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$"
+        },
+        "allowTextToAI": {
+          "type": "boolean",
+          "default": false
+        },
+        "maxAICalls": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000,
+          "default": 100
+        }
+      },
+      "required": []
+    },
+    "yield": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "tokenFile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "workspaceId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$"
+        },
+        "maxRepairStarts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20,
+          "default": 0
+        },
+        "maxSteps": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "aiModelId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$"
+        },
+        "allowDiagnosticsToAI": {
+          "type": "boolean",
+          "default": false
+        },
+        "allowedRunIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$"
+          },
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "url",
+        "workspaceId",
+        "maxSteps",
+        "allowedRunIds"
+      ]
+    },
+    "maxRows": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10000,
+      "default": 500
+    },
+    "maxJobs": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10000,
+      "default": 1000
+    }
+  },
+  "required": [],
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

@@ -14,9 +14,11 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
+	"github.com/danqing0b/cyrene-pilot-plugin/internal/automation"
 	"github.com/danqing0b/cyrene-pilot-plugin/internal/wire"
 	"google.golang.org/grpc"
 )
@@ -52,7 +54,11 @@ func start(ctx context.Context, args []string) error {
 	wantCapability := parser.String("capability", "", "Platform capability")
 	wantVersion := parser.String("interface-version", "", "Capability version")
 	listen := parser.String("listen", "", "Platform gRPC listener")
-	configPath := parser.String("config", os.Getenv("CYRENE_RELEASE_PILOT_CONFIG_FILE"), "Host-owned release configuration")
+	defaultConfig := os.Getenv("CYRENE_PILOT_CONFIG_FILE")
+	if defaultConfig == "" {
+		defaultConfig = os.Getenv("CYRENE_RELEASE_PILOT_CONFIG_FILE")
+	}
+	configPath := parser.String("config", defaultConfig, "Host-owned plugin configuration")
 	if err := parser.Parse(args); err != nil {
 		return err
 	}
@@ -69,11 +75,23 @@ func start(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	state, err := openStore(storage, cfg.Baseline)
-	if err != nil {
-		return err
+	var flow *automation.Service
+	if cfg.Automation != nil {
+		flow, err = automation.Open(storage, *cfg.Automation)
+		if err != nil {
+			return err
+		}
+		defer flow.Close()
 	}
-	defer state.db.Close()
+	var work *coordinator
+	if len(cfg.Candidates) > 0 {
+		state, err := openStore(storage, cfg.Baseline)
+		if err != nil {
+			return err
+		}
+		defer state.db.Close()
+		work = &coordinator{store: state, product: newProducts(cfg), now: time.Now, wake: make(chan struct{}, 1)}
+	}
 
 	direct, ref, err := localListener(*listen)
 	if err != nil {
@@ -85,11 +103,33 @@ func start(ctx context.Context, args []string) error {
 		return err
 	}
 	defer web.Close()
-	work := &coordinator{store: state, product: newProducts(cfg), now: time.Now, wake: make(chan struct{}, 1)}
 	server := grpc.NewServer(grpc.MaxRecvMsgSize(maxBody+1024), grpc.MaxSendMsgSize(maxBody+1024))
-	wire.RegisterDirectPluginRuntimeServer(server, &runtime{binding: binding, coordinator: work})
-	httpServer := &http.Server{Handler: work.routes(), ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout: 10 * time.Second, WriteTimeout: 65 * time.Second, IdleTimeout: 30 * time.Second}
+	wire.RegisterDirectPluginRuntimeServer(server, &runtime{binding: binding, coordinator: work, automation: flow})
+	var legacy http.Handler = http.NotFoundHandler()
+	if work != nil {
+		legacy = work.routes()
+	}
+	var flows http.Handler
+	if flow != nil {
+		flows = flow.Handler()
+	}
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" && r.URL.Path == "/healthz" {
+			writeJSON(w, 200, map[string]string{"status": "ok"})
+			return
+		}
+		if flows != nil && (strings.HasPrefix(r.URL.Path, "/admin/jobs/") || strings.HasPrefix(r.URL.Path, "/admin/tools/")) {
+			if !authorized(r, cfg.adminToken) {
+				writeJSON(w, 401, map[string]string{"error": "operator authorization required"})
+				return
+			}
+			flows.ServeHTTP(w, r)
+			return
+		}
+		legacy.ServeHTTP(w, r)
+	})
+	httpServer := &http.Server{Handler: handler, ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout: 10 * time.Second, WriteTimeout: 180 * time.Second, IdleTimeout: 30 * time.Second}
 	failures := make(chan error, 2)
 	go func() { failures <- server.Serve(direct) }()
 	go func() { failures <- httpServer.Serve(web) }()
@@ -103,11 +143,16 @@ func start(ctx context.Context, args []string) error {
 	}); err != nil {
 		return err
 	}
-	log.Printf("Release Pilot operator and inference endpoint at %s", web.Addr())
+	log.Printf("Cyrene Pilot operator endpoint at %s", web.Addr())
 	runContext, cancel := context.WithCancel(ctx)
-	done := make(chan struct{})
-	go func() { defer close(done); work.run(runContext) }()
-	defer func() { cancel(); <-done }()
+	var done sync.WaitGroup
+	if work != nil {
+		done.Go(func() { work.run(runContext) })
+	}
+	if flow != nil {
+		done.Go(func() { flow.Run(runContext) })
+	}
+	defer func() { cancel(); done.Wait() }()
 	select {
 	case <-ctx.Done():
 		return nil

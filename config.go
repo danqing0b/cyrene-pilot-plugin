@@ -11,10 +11,12 @@ import (
 	"os"
 	"regexp"
 	"strings"
+
+	"github.com/danqing0b/cyrene-pilot-plugin/internal/automation"
 )
 
 const pluginID = "cyrene.tools.release-pilot"
-const pluginVersion = "0.1.0"
+const pluginVersion = "0.2.0"
 const pilotAlias = "release-pilot"
 const maxBody = 2_000_000
 
@@ -51,6 +53,7 @@ type candidate struct {
 }
 
 type config struct {
+	Automation     *automation.Config   `json:"automation,omitempty"`
 	Echo           connection           `json:"echo"`
 	Reactor        connection           `json:"reactor"`
 	Exchange       connection           `json:"exchange"`
@@ -132,6 +135,19 @@ func loadConfig(path string) (config, error) {
 	defer f.Close()
 	if err := strictJSON(io.LimitReader(f, maxBody), &c); err != nil {
 		return c, err
+	}
+	if c.Automation != nil {
+		if err := c.Automation.Validate(); err != nil {
+			return c, err
+		}
+		if len(c.Candidates) == 0 {
+			host, _, err := net.SplitHostPort(c.HTTPListen)
+			if err != nil || !isLoopback(host) {
+				return c, errors.New("httpListen must bind a loopback IP address")
+			}
+			c.adminToken, err = readSecret(c.AdminTokenFile)
+			return c, err
+		}
 	}
 	for _, item := range []struct {
 		name         string

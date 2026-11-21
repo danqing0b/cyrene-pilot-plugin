@@ -1,110 +1,157 @@
-# Cyrene Release Pilot
+# Cyrene Pilot
 
-**Cyrene 原生 Go 插件，面向模型版本的试点发布、切流与回滚。**
+**面向 Cyrene 的 Go 原生自动化插件：模型回放评测、训练数据隐私处理、失败诊断与有界修复。**
 
-从 Navigator 发起发布后，插件调用 Echo 评估候选模型，将达标制品部署到 Reactor，并等待操作员确认。确认后，测试流量通过 Exchange 切到候选版本。候选连续探测失败时，插件恢复基线。人工审核过的错例可以交给 Catalyst，进入下一轮数据准备。
+通过 `tool.provider.v1` / gRPC `DirectPluginRuntime` 提供工具，复用 Echo、Catalyst 和 Yield 的现有资源与执行能力。插件负责采集输入、编排操作和保存证据，Product 服务保留评分、审核及训练执行权威。
 
-例如，更新客服工单分类模型时，可以用同一份标注集比较新旧版本。新版达标后，操作员确认切流。若新版接口持续超时，插件自动恢复旧版，并记录回滚结果。
+开发验证环境没有 GPU，生产环境可以连接 GPU 推理服务和 Yield GPU 训练环境。模拟验证与真实模型效果验证分别记录。
 
-## 发布流程
+## 能解决什么问题
 
-```mermaid
-flowchart LR
-    A["Navigator 发起发布"] --> B["Echo 评估门禁"]
-    B -->|达标| C["Reactor 部署候选"]
-    B -->|不达标| D["结束并记录原因"]
-    C --> E["操作员确认"]
-    E --> F["切换试点流量"]
-    F --> G["通过 Exchange 探测"]
-    G -->|连续失败| H["恢复基线并验证"]
-    G -->|持续健康| I["完成发布"]
-    I --> J["审核反馈交接至 Catalyst"]
-```
+| 功能 | 自动完成的工作 | 实际场景 |
+| --- | --- | --- |
+| 回放评测 | 固定题库 → 调用基线/候选 → 保存逐题回答、用量及耗时 → Echo 评分 → 生成差异报告 | 更新客服模型或提示词后，自动发现回答退化，无需人工准备两套 `actual` 文件 |
+| 数据隐私处理 | 本地规则遮盖 → 可选 AI 实体识别 → 脱敏稿及位置报告 → 可选 Catalyst 新版本交接 | 将客服聊天整理成训练数据时，处理手机号、邮箱、身份证号和凭据，保留待审核稿 |
+| 运行修复 | 读取失败日志和配置 → 诊断 → 生成绑定摘要的方案 → 创建/准备新草稿 → 在宿主预算内启动及回读 | CUDA OOM 后降低微批量、调整梯度累积，保存变更理由与执行回执 |
 
-| 环节 | 当前行为 |
-| --- | --- |
-| 评估 | Echo 比较同一数据集版本中的 100 条样本。候选须覆盖全部样本、精确匹配率至少为 90%，且得分不低于基线。部署沿用评估报告绑定的模型制品摘要。 |
-| 切流 | 操作员确认绑定候选摘要、评估结果和路由版本的快照。插件更新本地 `release-pilot` 别名，测试请求经 Exchange 转发到选中的模型。 |
-| 回滚 | 每 5 秒探测一次，连续 3 次失败后恢复基线并验证响应。候选持续健康 60 秒后成为下一次发布的基线。 |
-| 反馈 | 操作员从独立的 Echo 评估运行中选择已审核的更正。插件导出到 Catalyst 的待审核数据准备任务，并保存交接回执。 |
-| 恢复 | 发布进度和路由版本保存在 Platform 注入的插件私有目录。进程重启后继续核对原操作，相同提交键复用原发布记录。 |
+上游已经具备数据去重、LLM 评分、日志诊断及有限重试。三项功能的增量及检查修订见 [上游源码核对](docs/upstream-audit.md)。
 
-## 兼容性与验证结果
+## 构建
 
-- 插件 ID 为 `cyrene.tools.release-pilot`，通过 gRPC `DirectPluginRuntime` 提供 Cyrene `tool.provider.v1` 能力，由 Platform Package Runtime 安装与激活。
-- 打包脚本支持 Linux amd64 与 arm64。运行构建脚本需要 Go 1.25 或更新版本、Python 3.12 和用于 Go 竞态检测的 C 编译器。安装预构建包时，由 Python 准备脚本校验并暂存静态 Go 二进制。
-- Linux amd64 无 GPU 演练使用真实 Cyrene 服务和固定的模拟模型输出。90% 的基线与 95% 的候选通过评估，85% 的候选、缺失样本及制品摘要不符均被拦截。注入候选故障后 **17.84 秒**恢复基线。5 条审核反馈进入 Catalyst `MAPPED` 任务，重复交接返回同一回执。
-- 当前验收范围为隔离环境中的单绑定、非流式 Chat 试点和发布控制链。真实推理性能、模型质量及生产容量需要在目标环境验证。
-
-## 构建与安装
-
-从本仓库根目录运行构建脚本。
+需要 Go 1.25+、Python 3 和用于竞态检测的 C 编译器。当前打包支持 Linux amd64 / arm64。
 
 ```bash
 tools/build.sh
 ```
 
-脚本先运行 Go 静态检查和竞态测试，再将 ZIP 与配套 descriptor 输出到 `dist/`。使用 `--output` 可以指定目录。`CYRENE_GO` 和 `CYRENE_PYTHON` 可指定本机的工具链可执行文件。GitHub Actions 使用同一构建入口。
+脚本运行 `go vet` 和 `go test -race`，然后生成 `dist/` 下的 ZIP、Platform descriptor 和 `pilotctl`。可以使用 `--output DIRECTORY` 指定输出位置，或设置 `CYRENE_GO`、`CYRENE_PYTHON` 选择工具链。GitHub Actions 使用同一构建入口并保存构建产物。
 
-1. 将 ZIP 和配套 descriptor 交给 Platform Package Runtime 安装。为此安装配置可信的 [Go 二进制准备脚本](tools/prepare-static-go.py)。Platform 校验归档和依赖锁，准备脚本校验二进制摘要并设置执行权限。
-2. 按 [配置 schema](configuration.schema.json) 准备宿主配置。登记基线和候选的 Echo 输入、模型制品、Reactor serving binding 及 Exchange provider binding。隔离网关需已有健康的基线路由，并使用精确别名。
-3. 激活名为 `release-pilot` 的 `tool.provider.v1` 版本 1 绑定。将 `CYRENE_RELEASE_PILOT_CONFIG_FILE` 指向宿主配置的绝对路径。Platform 注入 `CYRENE_CAPABILITY_BINDING_ID` 和 `CYRENE_PLUGIN_STORAGE_PATH`，并返回 `connection_ref`。
-4. 将 [Navigator 绑定示例](navigator.binding.example.json) 合入持久化服务的 principal 配置，并将 `CYRENE_RELEASE_PILOT_CONNECTION_REF` 设为激活结果。Navigator checkout 需要包含 Release Pilot 桥接改动，绑定的组织与工作区需具有授权写入者。发起发布时沿用 Navigator 的写入审批策略。
+## 配置与启动
 
-插件的 `httpListen` 使用回环地址。分别配置操作员和测试流量的 Bearer 凭据，令牌从私有文件读取。Echo、Reactor 和 Exchange 使用各自的服务连接配置。
+从 [配置示例](examples/automation.config.json) 开始，修改服务地址、资源 ID 和宿主路径。示例题库见 [questions.jsonl](examples/questions.jsonl)。配置契约为 [configuration.schema.json](configuration.schema.json) 和 [automation.schema.json](automation.schema.json)。
 
-## 日常使用
+- 模型必须在 `automation.models` 登记固定服务 origin、模型名、版本、可选 `systemPrompt`、令牌文件与调用上限。请求只接受注册 ID。模型服务使用 `/v1/chat/completions`，可指向 Exchange 或兼容服务。
+- 数据文件必须登记绝对路径及实际字节的 `sha256:` 摘要。文件发生变化后，需要更新配置并创建新任务键。
+- 令牌从权限 `0600` 的私有文件读取。配置和存储目录应放在宿主私有目录。
+- Echo 需要已有 suite：`expectedField=reference`、`actualField=actual`，并配置对应 engine binding。插件核对 suite 快照、输入摘要、完整覆盖及 Run/Result/Gate 关联。Echo 和插件必须共享 `artifactRoot` CAS 挂载及文件访问身份。
+- `yield.maxRepairStarts` 默认 `0`，禁止启动修复训练；生产环境由宿主明确配置预算、`maxSteps` 和允许访问的 Run ID。当前 Yield 适配器面向独立部署的单工作区服务。
 
-通过 Navigator 调用 `release_prepare`，提交已登记的 `candidateId` 和本次操作的 `idempotencyKey`。使用 `release_status` 查询返回的 `releaseId`。候选进入 `AWAITING_APPROVAL` 后，操作员核对评估报告和模型制品，再决定是否切流。
-
-| 接口 | 用途 | 请求体 |
-| --- | --- | --- |
-| `GET /admin/releases/{id}` | 查看发布、评估、路由和反馈状态 | 空 |
-| `POST /admin/releases/{id}/approve` | 确认切流，快照有效期为 30 分钟 | `snapshot` 从 `approvalSnapshot` 取得，`routeVersion` 从 `expectedRouteVersion` 取得 |
-| `POST /admin/releases/{id}/refresh` | 重新检查路由与服务健康并更新审批快照 | 与审批接口相同 |
-| `POST /admin/releases/{id}/feedback` | 提交已审核的 Echo 更正，查询状态可取得 Catalyst 回执 | `runId` 和 `annotationIds` |
-| `POST /v1/chat/completions` | 使用试点入口发送非流式测试请求，响应携带 Exchange 请求 ID | OpenAI 兼容请求，`model` 为 `release-pilot` |
-
-`/admin/` 接口要求操作员 Bearer，Chat 入口要求测试流量 Bearer。需要回收反馈时，在与发布基准集分开的 Echo 运行中记录并审核更正，再选择对应的标注 ID。
-
-## 复跑无 GPU 演练
-
-从包含 `local_package_probe` 验收入口的 Cyrene-Platform checkout 编译启动器。以下整链路演练还需要包含 Release Pilot 桥接改动的 Navigator checkout。
+计算数据摘要：
 
 ```bash
-cargo build --locked -p cy-package-runtime --example local_package_probe
+sha256sum /srv/cyrene-pilot/questions.jsonl
 ```
 
-为各服务分别准备 Python 3.12 环境，并在下表指定的目录运行 `uv sync --frozen --group dev`。
+可由 Platform Package Runtime 使用 ZIP、descriptor 和宿主信任的 [静态准备器](tools/prepare-static-go.py) 安装。业务服务为静态 Go 二进制；manifest 的 `mixed` 表示 Go 服务与 Python 准备脚本的组合，兼容当前上游的语言枚举。
 
-| 服务 | 演练使用的修订 | 依赖目录 |
-| --- | --- | --- |
-| Echo | `5db51ca2971e` | 仓库根目录 |
-| Catalyst | `1593216baebc` | 仓库根目录 |
-| Exchange | `12fdd8966d06` | `product` |
-| Reactor | `470cec30bc09` | `product` |
-| Navigator | `4d3ed5185277` 加上 Release Pilot 桥接改动 | 仓库根目录 |
-
-从本仓库根目录运行演练。各路径变量分别指向 checkout、启动器和 Python 虚拟环境解释器。`ARCHIVE` 与 `DESCRIPTOR` 应来自同一次构建。
+也可以直接启动以验证标准协议：
 
 ```bash
-python3 tools/demo.py \
-  --platform-probe "$PLATFORM_PROBE" \
-  --navigator "$NAVIGATOR_ROOT" \
-  --navigator-python "$NAVIGATOR_PYTHON" \
-  --descriptor "$DESCRIPTOR" \
-  --archive "$ARCHIVE" \
-  --echo-python "$ECHO_PYTHON" \
-  --catalyst-python "$CATALYST_PYTHON" \
-  --exchange-python "$EXCHANGE_PYTHON" \
-  --reactor-python "$REACTOR_PYTHON" \
-  --report "$PWD/cpu-report.json"
+mkdir -p dist
+go build -o dist/cyrene-pilot .
+go build -o dist/pilotctl ./cmd/pilotctl
+install -d -m 700 /srv/cyrene-pilot/state
+export CYRENE_CAPABILITY_BINDING_ID=pilot
+export CYRENE_PLUGIN_STORAGE_PATH=/srv/cyrene-pilot/state
+
+dist/cyrene-pilot \
+  --capability tool.provider.v1 \
+  --interface-version 1 \
+  --listen 127.0.0.1:0 \
+  --config /srv/cyrene-pilot/config.json
 ```
 
-演练在临时目录中使用合成样本，启动 Platform supervisor、Navigator Work API 和四个产品服务。生成的 JSON 报告标记为 `SIMULATED`，包含插件激活代次、发现的工具、回滚耗时和反馈回执。
+第一行标准输出包含 `connection_ref`；gRPC 仅绑定回环或 Unix socket。生产宿主应隔离本地进程并按绑定授权调用。HTTP 管理接口仅在回环监听，除 `/healthz` 外需要操作员 Bearer。
 
-## 源码与许可证
+当前公开 Navigator 默认启动配置尚未自动登记此插件。接入 Navigator 需要宿主提供标准工具绑定，不能直接使用旧实验中的专用桥接配置。以下 `pilotctl` 可直接调用原生协议。
 
-能力声明见 [plugin.manifest.json](plugin.manifest.json)。使用 [生成脚本](tools/generate-wire.sh) 可从 Cyrene 中央 Protobuf 契约重新生成 Go 绑定，工具版本为 protoc 25.1、protoc-gen-go v1.36.11 和 protoc-gen-go-grpc v1.6.1。
+## 调用工具
 
-插件采用 [Apache License 2.0](LICENSES/Apache-2.0.txt)。本仓库保留原有 [LICENSE](LICENSE)，Cyrene 插件源码及所带的 Protobuf 契约采用上面的 Apache 许可证。
+将启动返回的值设置为 `PILOT_CONNECTION_REF`。绑定名应与启动配置一致。
+
+```bash
+dist/pilotctl --connection "$PILOT_CONNECTION_REF" --binding pilot
+
+dist/pilotctl --connection "$PILOT_CONNECTION_REF" --binding pilot \
+  --tool eval_replay_start <<'JSON'
+{"datasetId":"support","baselineId":"baseline","candidateId":"candidate","idempotencyKey":"support-regression-001"}
+JSON
+```
+
+启动工具返回任务 ID。使用 `pilot_job_status` 查询进度；参数可由标准输入或 `--args-file` 提供。
+
+| 工具 | 参数 | 行为 |
+| --- | --- | --- |
+| `eval_replay_start` | `datasetId, baselineId, candidateId, idempotencyKey` | 异步采集双方回答并交由 Echo 评分 |
+| `data_guard_start` | `datasetId, idempotencyKey` | 异步扫描，生成脱敏稿和报告 |
+| `run_doctor_start` | `runId, idempotencyKey` | 异步诊断并保存修复方案，不启动训练 |
+| `pilot_job_status` | `jobId` | 查询状态、操作回执、摘要及制品摘要 |
+| `pilot_guard_apply` | `jobId, planDigest` | 核对 Catalyst 原始快照，创建脱敏子版本，保留待审核状态 |
+| `pilot_doctor_prepare` | `jobId, planDigest` | 按已保存的方案创建新 Yield 草稿并准备配置 |
+| `pilot_doctor_start` | `jobId, planDigest` | 在宿主授权预算内启动准备好的修复草稿 |
+| `pilot_doctor_check` | `jobId` | 回读修复运行，或核对响应丢失后的草稿到运行关联 |
+
+未配置对应 Product 的工具不会出现在目录中。写入动作的 `planDigest` 必须与任务返回值相同；模型建议不能改变预算或执行任意命令。
+
+HTTP 管理接口也支持 `POST /admin/tools/{tool}`、`GET /admin/jobs/{id}` 和 `GET /admin/jobs/{id}/artifacts/{name}`。制品名来自任务的 `artifacts`，接口不接受任意文件路径。
+
+### 回放评测
+
+题库采用 JSONL，每条包含唯一 `sampleId`、非空 `prompt` 和字符串 `reference`。双方使用同一冻结题库及固定生成参数。结果包括 `baseline.jsonl`、`candidate.jsonl` 和 `comparison.json`。
+
+`accepted` 表示候选通过 Echo 门禁且分数不低于基线。模型名及宿主登记的 revision 会记录到回答中；revision 是宿主声明，不等同于远端权重校验。报告中的延迟为本次请求耗时，不能直接当作生产性能基准。
+
+### 隐私处理与 AI
+
+本地规则覆盖邮箱、中国大陆手机号、18 位身份证形状、部分 API key / Bearer / PEM 私钥，以及敏感字段。使用私有随机 HMAC 盐生成一致替换标记，报告不包含原始匹配值。
+
+可选配置 `dataGuard.aiModelId` 和 `allowTextToAI=true`。插件先遮盖已知敏感值，再将剩余文本交给登记模型；严格验证人名、地址、出生日期的 Unicode 字符区间。`maxAICalls` 限制调用数量。未开启时只运行本地规则。
+
+产物为 `sanitized.jsonl` 和 `guard-report.json`，状态始终为 `PENDING`。规则与 AI 都存在漏检可能，训练集发布仍需审核。
+
+要交接 Catalyst，注册文件必须是完整的目标 revision 快照，每行包含 `recordId` 和 `rawRecord`，并配置该数据集的 `catalyst.datasetId/revisionId/resourceVersion` 及全局 Catalyst 连接。插件核对远端原始记录，调用已有 `remap` 创建子版本；一次最多 200 条变更，不自动批准记录。
+
+### 诊断与修复
+
+诊断分类包含 CUDA OOM、磁盘空间、环境、数据及授权错误。当前可执行修复仅覆盖完整证据下的 CUDA OOM：降低每设备微批量，通过梯度累积保持有效批量，并限制新运行步数。微批量已为 1、诊断不完整或错误类型不支持时，返回人工处理建议。
+
+可配置 `yield.aiModelId` 与 `allowDiagnosticsToAI=true`，让 AI 解释经本地规则遮盖的日志。AI 输出只作建议；可执行参数由确定性规则产生。
+
+`pilot_doctor_prepare` 复用 Yield 的制品校验与草稿准备。完整 GPU 预检由 Yield 的执行路径负责。源运行、工作区、配置和方案摘要发生变化时拒绝启动。预算按已派发启动记账，同一失败源最多派发一次修复；结果未知的启动也占用预算。
+
+修复运行完成后标记 `COMPLETED_REQUIRES_EVALUATION`，需要再做模型评测确认效果。
+
+## 持久化与恢复
+
+任务、逐次派发意图和回执保存在私有 `automation.db`，结果文件位于私有 `artifacts/`。同一工具的同一幂等键复用原任务；键绑定了不同参数或宿主配置时返回冲突。
+
+模型调用、Catalyst 修订和训练启动发生失联时保留 `UNKNOWN`，不自动重复收费或重复启动。可通过 Product 回读核对修复启动。Echo Run 创建和 Yield 草稿创建只在已检查的 Product 幂等契约下复用操作。
+
+任务状态为 `QUEUED / RUNNING / SUCCEEDED / FAILED / NEEDS_ATTENTION`。`SUCCEEDED` 表示工作流完成；是否通过评测、是否仍待审核及修复结果分别见摘要。队列当前使用单 worker；账本达到 `maxJobs` 后拒绝新增，需宿主归档或调整容量。
+
+## 验证
+
+```bash
+go test -race ./...
+```
+
+自动测试覆盖回答采集、退化拦截、Echo 证据不匹配、Unicode 脱敏、发送 AI 前遮盖、Catalyst 快照与幂等边界、训练预算、失联恢复、方案过期及原生 gRPC。测试中的模型、Yield 和 Catalyst 为明确的协议夹具。
+
+与真实 Echo 和官方 exact-match 插件复跑：
+
+```bash
+python3 tools/verify-echo.py \
+  --echo-python /path/to/Cyrene-Echo/.venv/bin/python \
+  --plugins-root /path/to/Cyrene-Plugins-Official \
+  --plugin "$PWD/dist/cyrene-pilot" \
+  --pilotctl "$PWD/dist/pilotctl" \
+  --report /tmp/pilot-echo-report.json
+```
+
+Echo 的 Python 环境需安装其锁定依赖和公开的 `cyrene_plugin_runtime` SDK。该脚本启动真实 Echo、官方评分器、已编译 Go 插件和原生客户端；模型推理为模拟端点，报告明确标记 `productionGPU=NOT_RUN`。真实模型质量、GPU 修复效果和吞吐需在生产目标环境验收。
+
+## 兼容性与许可证
+
+版本为 **0.2.0**。保留 `cyrene.tools.release-pilot` 插件 ID、原 Package Runtime 二进制入口和 `CYRENE_RELEASE_PILOT_CONFIG_FILE` 环境变量；也支持 `CYRENE_PILOT_CONFIG_FILE`。完整旧配置可继续启用 [试点发布兼容模块](docs/legacy-release.md)，新增功能不依赖它。
+
+本次实现不携带其他 Cyrene 仓库的私有集成补丁。插件源码与附带 Protobuf 契约使用 [Apache-2.0](LICENSES/Apache-2.0.txt)，仓库保留所有者维护的 [LICENSE](LICENSE)。

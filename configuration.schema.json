@@ -2,28 +2,77 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "required": ["echo", "reactor", "exchange", "inference", "adminTokenFile", "pilotTokenFile", "httpListen", "receiverId", "gatewayEndpointId", "evaluationSuiteId", "baseline", "candidates"],
+  "required": [
+    "httpListen",
+    "adminTokenFile"
+  ],
   "properties": {
-    "echo": {"$ref": "#/$defs/connection"},
-    "reactor": {"$ref": "#/$defs/authenticated"},
-    "exchange": {"$ref": "#/$defs/authenticated"},
-    "inference": {"$ref": "#/$defs/authenticated"},
-    "adminTokenFile": {"type": "string", "minLength": 1},
-    "pilotTokenFile": {"type": "string", "minLength": 1},
-    "httpListen": {"type": "string", "minLength": 1},
-    "receiverId": {"type": "string", "minLength": 1},
-    "gatewayEndpointId": {"type": "string", "format": "uuid"},
-    "evaluationSuiteId": {"type": "string", "format": "uuid"},
+    "echo": {
+      "$ref": "#/$defs/connection"
+    },
+    "reactor": {
+      "$ref": "#/$defs/authenticated"
+    },
+    "exchange": {
+      "$ref": "#/$defs/authenticated"
+    },
+    "inference": {
+      "$ref": "#/$defs/authenticated"
+    },
+    "adminTokenFile": {
+      "type": "string",
+      "minLength": 1
+    },
+    "pilotTokenFile": {
+      "type": "string",
+      "minLength": 1
+    },
+    "httpListen": {
+      "type": "string",
+      "minLength": 1
+    },
+    "receiverId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "gatewayEndpointId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "evaluationSuiteId": {
+      "type": "string",
+      "format": "uuid"
+    },
     "baseline": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["inputId", "digest", "routeId", "alias", "model"],
+      "required": [
+        "inputId",
+        "digest",
+        "routeId",
+        "alias",
+        "model"
+      ],
       "properties": {
-        "inputId": {"type": "string", "format": "uuid"},
-        "digest": {"$ref": "#/$defs/digest"},
-        "routeId": {"type": "string", "format": "uuid"},
-        "alias": {"type": "string", "minLength": 1},
-        "model": {"type": "string", "minLength": 1}
+        "inputId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "routeId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "alias": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
     "candidates": {
@@ -32,38 +81,120 @@
       "additionalProperties": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["inputId", "artifact", "servingBindingId", "providerBindingId"],
+        "required": [
+          "inputId",
+          "artifact",
+          "servingBindingId",
+          "providerBindingId"
+        ],
         "properties": {
-          "inputId": {"type": "string", "format": "uuid"},
-          "artifact": {"$ref": "#/$defs/artifact"},
-          "servingBindingId": {"type": "string", "minLength": 1},
-          "providerBindingId": {"type": "string", "minLength": 1}
+          "inputId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "artifact": {
+            "$ref": "#/$defs/artifact"
+          },
+          "servingBindingId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "providerBindingId": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       }
+    },
+    "automation": {
+      "$ref": "automation.schema.json"
     }
   },
   "$defs": {
     "connection": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["url"],
-      "properties": {"url": {"type": "string", "format": "uri"}, "tokenFile": {"type": "string", "minLength": 1}}
+      "required": [
+        "url"
+      ],
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "tokenFile": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
     },
     "authenticated": {
-      "allOf": [{"$ref": "#/$defs/connection"}, {"required": ["tokenFile"]}]
+      "allOf": [
+        {
+          "$ref": "#/$defs/connection"
+        },
+        {
+          "required": [
+            "tokenFile"
+          ]
+        }
+      ]
     },
-    "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
     "artifact": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["uri", "digest", "size_bytes", "kind"],
+      "required": [
+        "uri",
+        "digest",
+        "size_bytes",
+        "kind"
+      ],
       "properties": {
-        "uri": {"type": "string", "pattern": "^artifact://sha256/[a-f0-9]{64}$"},
-        "digest": {"$ref": "#/$defs/digest"},
-        "size_bytes": {"type": "integer", "minimum": 1},
-        "kind": {"const": "model"},
-        "manifest_digest": {"$ref": "#/$defs/digest"}
+        "uri": {
+          "type": "string",
+          "pattern": "^artifact://sha256/[a-f0-9]{64}$"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "kind": {
+          "const": "model"
+        },
+        "manifest_digest": {
+          "$ref": "#/$defs/digest"
+        }
       }
     }
-  }
+  },
+  "anyOf": [
+    {
+      "required": [
+        "automation"
+      ]
+    },
+    {
+      "required": [
+        "echo",
+        "reactor",
+        "exchange",
+        "inference",
+        "adminTokenFile",
+        "pilotTokenFile",
+        "httpListen",
+        "receiverId",
+        "gatewayEndpointId",
+        "evaluationSuiteId",
+        "baseline",
+        "candidates"
+      ]
+    }
+  ]
 }

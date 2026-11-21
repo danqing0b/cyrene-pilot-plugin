@@ -7,6 +7,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/danqing0b/cyrene-pilot-plugin/internal/automation"
 	"github.com/danqing0b/cyrene-pilot-plugin/internal/wire"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -21,6 +22,7 @@ type runtime struct {
 	wire.UnimplementedDirectPluginRuntimeServer
 	binding     string
 	coordinator *coordinator
+	automation  *automation.Service
 }
 
 func (s *runtime) Health(context.Context, *wire.HealthRequest) (*wire.HealthResponse, error) {
@@ -37,7 +39,7 @@ func invalidRequest(code wire.DirectInvocationError_Code, text string) (*wire.Di
 		Error: &wire.DirectInvocationError{Code: code, Message: text}}}, nil
 }
 
-func (s *runtime) Invoke(_ context.Context, req *wire.DirectInvocationRequest) (*wire.DirectInvocationResponse, error) {
+func (s *runtime) Invoke(ctx context.Context, req *wire.DirectInvocationRequest) (*wire.DirectInvocationResponse, error) {
 	if req.GetCapability() != capability || req.GetInterfaceVersion() != version ||
 		strings.TrimSpace(req.GetRequestId()) == "" || len(req.GetRequestId()) > 256 ||
 		req.GetStreamMode() != wire.DirectStreamMode_DIRECT_STREAM_MODE_UNSPECIFIED ||
@@ -62,7 +64,7 @@ func (s *runtime) Invoke(_ context.Context, req *wire.DirectInvocationRequest) (
 	case *wire.ListToolsRequest:
 		output = s.listTools(value.GetBindingId())
 	case *wire.CallToolRequest:
-		output = s.callTool(value)
+		output = s.callToolContext(ctx, value)
 	}
 	raw, err := proto.Marshal(output)
 	if err != nil {
@@ -84,13 +86,21 @@ func (s *runtime) listTools(binding string) *wire.ListToolsResponse {
 		return &wire.ListToolsResponse{Result: &wire.ListToolsResponse_Error{
 			Error: providerError(wire.ToolProviderErrorCode_TOOL_PROVIDER_ERROR_CODE_INVALID_ARGUMENTS, "unknown binding")}}
 	}
-	return &wire.ListToolsResponse{Result: &wire.ListToolsResponse_Catalog{Catalog: &wire.ToolCatalog{
-		CatalogVersion: "release-pilot-v1", Tools: []*wire.ToolDescriptor{
+	tools := []*wire.ToolDescriptor{}
+	if s.coordinator != nil {
+		tools = []*wire.ToolDescriptor{
 			{BindingId: s.binding, ProviderToolId: "release_prepare", DisplayName: "Prepare model release", InputSchemaJson: prepareSchema,
 				Description: "Evaluate and stage a registered candidate for operator approval."},
 			{BindingId: s.binding, ProviderToolId: "release_status", DisplayName: "Read model release status", InputSchemaJson: statusSchema,
 				Description: "Read the state and durable receipts for a release."},
-		}}}}
+		}
+	}
+	if s.automation != nil {
+		for _, tool := range s.automation.Tools() {
+			tools = append(tools, &wire.ToolDescriptor{BindingId: s.binding, ProviderToolId: tool.ID, DisplayName: tool.Name, Description: tool.Description, InputSchemaJson: tool.Schema})
+		}
+	}
+	return &wire.ListToolsResponse{Result: &wire.ListToolsResponse_Catalog{Catalog: &wire.ToolCatalog{CatalogVersion: "pilot-v2", Tools: tools}}}
 }
 
 func toolError(code wire.ToolProviderErrorCode, message string) *wire.CallToolResponse {
@@ -98,9 +108,30 @@ func toolError(code wire.ToolProviderErrorCode, message string) *wire.CallToolRe
 }
 
 func (s *runtime) callTool(req *wire.CallToolRequest) *wire.CallToolResponse {
+	return s.callToolContext(context.Background(), req)
+}
+func (s *runtime) callToolContext(ctx context.Context, req *wire.CallToolRequest) *wire.CallToolResponse {
 	badInput := wire.ToolProviderErrorCode_TOOL_PROVIDER_ERROR_CODE_INVALID_ARGUMENTS
 	if req.BindingId != s.binding {
 		return toolError(badInput, "unknown binding")
+	}
+	if s.automation != nil {
+		for _, tool := range s.automation.Tools() {
+			if req.ProviderToolId == tool.ID {
+				value, err := s.automation.Call(ctx, req.ProviderToolId, []byte(req.ArgumentsJson))
+				if err != nil {
+					return toolError(badInput, err.Error())
+				}
+				data, err := json.Marshal(value)
+				if err != nil {
+					return toolError(wire.ToolProviderErrorCode_TOOL_PROVIDER_ERROR_CODE_EXECUTION_FAILED, "job could not be encoded")
+				}
+				return &wire.CallToolResponse{Result: &wire.CallToolResponse_Outcome{Outcome: &wire.ToolCallOutcome{Content: []*wire.ToolContentPart{{Content: &wire.ToolContentPart_Json{Json: &wire.ToolJsonContent{Json: string(data)}}}}}}}
+			}
+		}
+	}
+	if s.coordinator == nil {
+		return toolError(wire.ToolProviderErrorCode_TOOL_PROVIDER_ERROR_CODE_TOOL_NOT_FOUND, "unknown tool")
 	}
 	var entry *release
 	var err error

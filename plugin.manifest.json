@@ -1,18 +1,18 @@
 {
   "schemaVersion": 1,
   "id": "cyrene.tools.release-pilot",
-  "name": "Release Pilot",
-  "version": "0.1.0",
+  "name": "Cyrene Pilot",
+  "version": "0.2.0",
   "licenseExpression": "Apache-2.0",
   "kind": "tool-provider",
-  "description": "Prepare a gated model release, control one isolated pilot route, and hand reviewed feedback to Catalyst.",
+  "description": "Collect model answers for Echo regression evaluation, redact training data, and prepare bounded Yield repairs; optional legacy pilot release control.",
   "capabilities": ["tool.provider.v1"],
   "methods": [
     {"name": "list_tools", "capability": "tool.provider.v1", "interfaceVersion": "1", "executionMode": "service"},
     {"name": "call_tool", "capability": "tool.provider.v1", "interfaceVersion": "1", "executionMode": "service"}
   ],
   "runtime": {
-    "language": "go",
+    "language": "mixed",
     "protocol": "cyrene.plugin.runtime.v1.DirectPluginRuntime",
     "launch": {"executable": "prepared-runtime", "args": []}
   },

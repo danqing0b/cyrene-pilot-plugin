@@ -22,3 +22,8 @@ jobs:
         with:
           python-version: '3.12'
       - run: tools/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cyrene-pilot-linux-amd64
+          path: dist/
+          if-no-files-found: error

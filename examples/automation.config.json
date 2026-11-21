@@ -1,0 +1,53 @@
+{
+  "httpListen": "127.0.0.1:9088",
+  "adminTokenFile": "/srv/cyrene-pilot/operator.token",
+  "automation": {
+    "models": {
+      "baseline": {
+        "url": "http://127.0.0.1:8000",
+        "tokenFile": "/srv/cyrene-pilot/model.token",
+        "model": "support-baseline",
+        "revision": "replace-with-pinned-revision",
+        "maxTokens": 1024,
+        "timeoutSeconds": 60
+      },
+      "candidate": {
+        "url": "http://127.0.0.1:8001",
+        "tokenFile": "/srv/cyrene-pilot/model.token",
+        "model": "support-candidate",
+        "revision": "replace-with-pinned-revision",
+        "maxTokens": 1024,
+        "timeoutSeconds": 60
+      }
+    },
+    "datasets": {
+      "support": {
+        "path": "/srv/cyrene-pilot/questions.jsonl",
+        "digest": "sha256:260c6b56521147af0e256ba5ace0e51c77638c2e9535360ecec6aa2a488c8fb1"
+      }
+    },
+    "echo": {
+      "url": "http://127.0.0.1:9100",
+      "tokenFile": "/srv/cyrene-pilot/echo.token",
+      "artifactRoot": "/srv/cyrene-artifacts",
+      "suiteId": "00000000-0000-4000-8000-000000000001",
+      "engineBindingId": "exact-match-plugin"
+    },
+    "dataGuard": {
+      "allowTextToAI": false,
+      "maxAICalls": 100
+    },
+    "yield": {
+      "url": "http://127.0.0.1:9200",
+      "tokenFile": "/srv/cyrene-pilot/yield.token",
+      "workspaceId": "default",
+      "allowedRunIds": [
+        "00000000-0000-4000-8000-000000000002"
+      ],
+      "maxRepairStarts": 0,
+      "maxSteps": 100
+    },
+    "maxRows": 500,
+    "maxJobs": 1000
+  }
+}

@@ -55,6 +55,7 @@ def main():
     entries = {
         "bin/cyrene-release-pilot": executable,
         "configuration.schema.json": (ROOT / "configuration.schema.json").read_bytes(),
+        "automation.schema.json": (ROOT / "automation.schema.json").read_bytes(),
         "plugin.manifest.json": (ROOT / "plugin.manifest.json").read_bytes(),
         "runtime.lock": lock,
         "LICENSE": (ROOT / "LICENSES" / "Apache-2.0.txt").read_bytes(),
