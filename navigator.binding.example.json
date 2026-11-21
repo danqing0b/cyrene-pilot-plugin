@@ -1,0 +1,10 @@
+{
+  "release_pilot_bindings": [
+    {
+      "organization_id": "your-pilot-organization",
+      "workspace_id": "your-pilot-workspace",
+      "binding_id": "release-pilot",
+      "connection_ref_env": "CYRENE_RELEASE_PILOT_CONNECTION_REF"
+    }
+  ]
+}

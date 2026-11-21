@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "cyrene.tools.release-pilot",
+  "name": "Release Pilot",
+  "version": "0.1.0",
+  "licenseExpression": "Apache-2.0",
+  "kind": "tool-provider",
+  "description": "Prepare a gated model release, control one isolated pilot route, and hand reviewed feedback to Catalyst.",
+  "capabilities": ["tool.provider.v1"],
+  "methods": [
+    {"name": "list_tools", "capability": "tool.provider.v1", "interfaceVersion": "1", "executionMode": "service"},
+    {"name": "call_tool", "capability": "tool.provider.v1", "interfaceVersion": "1", "executionMode": "service"}
+  ],
+  "runtime": {
+    "language": "go",
+    "protocol": "cyrene.plugin.runtime.v1.DirectPluginRuntime",
+    "launch": {"executable": "prepared-runtime", "args": []}
+  },
+  "configuration": {"schemaRef": "configuration.schema.json"},
+  "state": {"isStateful": true, "storageCategory": "document", "retentionPolicyOnUninstall": "retain"}
+}
