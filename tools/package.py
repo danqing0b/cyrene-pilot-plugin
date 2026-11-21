@@ -60,6 +60,10 @@ def main():
         "runtime.lock": lock,
         "LICENSE": (ROOT / "LICENSES" / "Apache-2.0.txt").read_bytes(),
     }
+    for source in sorted((ROOT / "integrations/navigator").glob("*.py")):
+        entries["integrations/navigator/" + source.name] = source.read_bytes()
+    entries["integrations/navigator/README.md"] = (ROOT / "integrations/navigator/README.md").read_bytes()
+    entries["navigator.binding.example.json"] = (ROOT / "navigator.binding.example.json").read_bytes()
     content = hashlib.sha256()
     for name, data in sorted(entries.items()):
         key = name.encode()

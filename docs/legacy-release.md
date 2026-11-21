@@ -4,6 +4,6 @@
 
 旧模块比较预先导入的 100 条回答，执行受控部署，在操作员确认后更新本地 `release-pilot` 代理入口，并观察 60 秒。它只影响经过该入口的请求；发布结束后不继续进行长期质量监测。探测检查可达性、模型别名和非空内容，不证明业务回答正确。
 
-`tools/demo.py` 和 `navigator.binding.example.json` 是旧实验材料，依赖未随本仓库发布的 Navigator 桥接及 Platform 验收入口。它们不属于 v0.2 的可独立复跑验收。新功能使用 README 中的标准 gRPC 客户端和 `tools/verify-echo.py`。
+`tools/demo.py` 是旧实验材料，依赖未随本仓库发布的 Navigator 桥接及 Platform 验收入口。它们不属于 v0.2 的可独立复跑验收。新功能使用 README 中的客户端、Work 桥接和对应验收脚本。根目录的 `navigator.binding.example.json` 现已更新为 v0.3 Work 桥接配置。
 
-本仓库保留 `cyrene.tools.release-pilot` 插件 ID、二进制入口名称和旧环境变量，避免破坏已有私有试点安装。展示名称为 Cyrene Pilot，版本为 0.2.0。
+本仓库保留 `cyrene.tools.release-pilot` 插件 ID、二进制入口名称和旧环境变量，避免破坏已有私有试点安装。展示名称为 Cyrene Pilot，版本为 0.3.0。

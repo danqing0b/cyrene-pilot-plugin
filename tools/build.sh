@@ -54,6 +54,7 @@ case $go_version in
 esac
 
 cd "$plugin_dir"
+"$python_bin" -m py_compile integrations/navigator/pilot_bridge.py integrations/navigator/serve.py tools/verify-navigator.py
 "$go_bin" vet -mod=readonly ./...
 CGO_ENABLED=1 "$go_bin" test -mod=readonly -race ./...
 "$python_bin" tools/package.py --output "$output_dir" --go "$go_bin"

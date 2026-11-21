@@ -63,7 +63,7 @@ dist/cyrene-pilot \
 
 第一行标准输出包含 `connection_ref`；gRPC 仅绑定回环或 Unix socket。生产宿主应隔离本地进程并按绑定授权调用。HTTP 管理接口仅在回环监听，除 `/healthz` 外需要操作员 Bearer。
 
-当前公开 Navigator 默认启动配置尚未自动登记此插件。接入 Navigator 需要宿主提供标准工具绑定，不能直接使用旧实验中的专用桥接配置。以下 `pilotctl` 可直接调用原生协议。
+Navigator 接入使用随仓库提供的 [Work 工具桥接与启动器](integrations/navigator/README.md)。使用该启动器后，原版 Navigator Work API 可以发现并调用插件，Harness 沿用现有工具审批和操作回执。需要一次宿主配置及独立的组织/工作区插件实例；直接运行上游原命令不会自动加载该扩展。此路径不使用固定白名单的会话签名工具客户端。
 
 ## 调用工具
 
@@ -150,8 +150,10 @@ python3 tools/verify-echo.py \
 
 Echo 的 Python 环境需安装其锁定依赖和公开的 `cyrene_plugin_runtime` SDK。该脚本启动真实 Echo、官方评分器、已编译 Go 插件和原生客户端；模型推理为模拟端点，报告明确标记 `productionGPU=NOT_RUN`。真实模型质量、GPU 修复效果和吞吐需在生产目标环境验收。
 
+Navigator 实际接入验证命令与权限边界见 [桥接说明](integrations/navigator/README.md)。验证覆盖真实 Work API 到独立 Go gRPC 进程的调用，不包含 LLM Agent 会话与 GPU 推理。
+
 ## 兼容性与许可证
 
-版本为 **0.2.0**。保留 `cyrene.tools.release-pilot` 插件 ID、原 Package Runtime 二进制入口和 `CYRENE_RELEASE_PILOT_CONFIG_FILE` 环境变量；也支持 `CYRENE_PILOT_CONFIG_FILE`。完整旧配置可继续启用 [试点发布兼容模块](docs/legacy-release.md)，新增功能不依赖它。
+版本为 **0.3.0**。保留 `cyrene.tools.release-pilot` 插件 ID、原 Package Runtime 二进制入口和 `CYRENE_RELEASE_PILOT_CONFIG_FILE` 环境变量；也支持 `CYRENE_PILOT_CONFIG_FILE`。完整旧配置可继续启用 [试点发布兼容模块](docs/legacy-release.md)，新增功能不依赖它。
 
 本次实现不携带其他 Cyrene 仓库的私有集成补丁。插件源码与附带 Protobuf 契约使用 [Apache-2.0](LICENSES/Apache-2.0.txt)，仓库保留所有者维护的 [LICENSE](LICENSE)。

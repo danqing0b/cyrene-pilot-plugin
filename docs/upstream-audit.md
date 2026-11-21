@@ -37,7 +37,7 @@ Yield 的 `PATCH /training-drafts/{id}` 校验制品并保存准备配置；完�
 - Echo 适配器使用现有 `/api/v1/evaluation-runs`，要求与 Echo 共用同一 UID 可读写的本地或共享 CAS 挂载。当前插件没有跨节点制品传输器。
 - Yield 适配器使用公开 legacy Product API，适用于独立部署的单工作区服务；宿主必须登记允许诊断的 Run ID，插件还核对源草稿工作区。它不会绕过受保护的 workspace 私有接口。多租户部署应先补齐受授权的诊断与修复 API 适配。
 - Catalyst 写入前核对版本、完整记录覆盖和每条原始记录；一次最多 200 条变更。插件返回新版本回执，不把草稿等同于已审核训练集。
-- 原生 `tool.provider.v1` 通过真实 gRPC 传输验证。当前上游 Navigator 默认启动配置未自动登记本插件；宿主仍需提供工具绑定。仓库附带 `pilotctl` 可直接调用标准协议，不依赖未发布的 Navigator 桥接补丁。
+- 原生 `tool.provider.v1` 通过真实 gRPC 传输验证。当前上游 Navigator 默认启动配置未自动登记本插件；宿主仍需提供工具绑定。v0.3 提供自有 Work 桥接启动器，通过公开 app factory 扩展登记工具，不依赖未发布的上游补丁；会话签名客户端的固定白名单仍保持原样。
 - 官方 manifest schema 没有 `go` 枚举。清单使用合法的 `mixed`，对应 Go 服务和 Python 准备脚本；实际业务逻辑全部为 Go。Platform 需要宿主信任并登记本仓库的静态二进制准备器。
 
 ## 验证分层
